@@ -1,4 +1,4 @@
-import { ChatMessage, SkinPhoto, User } from '@/constants/database.types';
+import { ChatMessage, CommunityComment, CommunityPost, SkinPhoto, User } from '@/constants/database.types';
 import { supabase } from '@/constants/supabase';
 import * as FileSystem from 'expo-file-system';
 import { useEffect, useState } from 'react';
@@ -451,6 +451,324 @@ export function useSupabase() {
     }
   };
 
+  // Community functions
+  const createCommunityPost = async (title: string, content: string, category: 'advice' | 'support' | 'routine' | 'progress' | 'general' = 'general') => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .insert({
+          user_id: user.id,
+          title,
+          content,
+          category,
+          likes_count: 0,
+          comments_count: 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating community post:', error);
+      throw error;
+    }
+  };
+
+  const getCommunityPosts = async (limit = 10, orderBy: 'created_at' | 'votes' = 'created_at', order: 'asc' | 'desc' = 'desc'): Promise<CommunityPost[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select(`
+          *,
+          user:users(email, first_name)
+        `)
+        .order(orderBy, { ascending: order === 'asc' })
+        .limit(limit);
+
+      if (error) throw error;
+      
+      if (data && user) {
+        // Get all post IDs
+        const postIds = data.map(post => post.id);
+        
+        // Fetch likes for all posts in one query
+        const { data: likesData } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .eq('user_id', user.id)
+          .in('post_id', postIds);
+
+        const likedPostIds = new Set(likesData?.map(like => like.post_id) || []);
+        
+        // Add is_liked field to each post
+        return data.map(post => ({
+          ...post,
+          is_liked: likedPostIds.has(post.id)
+        }));
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching community posts:', error);
+      return [];
+    }
+  };
+
+  const getCommunityPost = async (id: string): Promise<CommunityPost | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select(`
+          *,
+          user:users(email, first_name)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      
+      if (data && user) {
+        // Check if the current user has liked this post
+        const { data: likeData } = await supabase
+          .from('post_likes')
+          .select('*')
+          .eq('post_id', id)
+          .eq('user_id', user.id)
+          .single();
+
+        return {
+          ...data,
+          is_liked: !!likeData
+        };
+      }
+      
+      return data || null;
+    } catch (error) {
+      console.error('Error fetching community post:', error);
+      return null;
+    }
+  };
+
+  const updateCommunityPost = async (id: string, updates: Partial<CommunityPost>) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating community post:', error);
+      throw error;
+    }
+  };
+
+  const deleteCommunityPost = async (id: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { error } = await supabase
+        .from('community_posts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting community post:', error);
+      throw error;
+    }
+  };
+
+  const createCommunityComment = async (postId: string, content: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { data, error } = await supabase
+        .from('community_comments')
+        .insert({
+          post_id: postId,
+          user_id: user.id,
+          content,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating community comment:', error);
+      throw error;
+    }
+  };
+
+  const getCommunityComments = async (postId: string, limit = 10): Promise<CommunityComment[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('community_comments')
+        .select(`
+          *,
+          user:users(email, first_name)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true }) // Default to ascending for comments
+        .limit(limit);
+
+      if (error) throw error;
+      
+      if (data && user) {
+        // Get all comment IDs
+        const commentIds = data.map(comment => comment.id);
+        
+        // Fetch likes for all comments in one query
+        const { data: likesData } = await supabase
+          .from('comment_likes')
+          .select('comment_id')
+          .eq('user_id', user.id)
+          .in('comment_id', commentIds);
+
+        const likedCommentIds = new Set(likesData?.map(like => like.comment_id) || []);
+        
+        // Add is_liked field to each comment
+        return data.map(comment => ({
+          ...comment,
+          is_liked: likedCommentIds.has(comment.id)
+        }));
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching community comments:', error);
+      return [];
+    }
+  };
+
+  const updateCommunityComment = async (id: string, updates: Partial<CommunityComment>) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { data, error } = await supabase
+        .from('community_comments')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating community comment:', error);
+      throw error;
+    }
+  };
+
+  const deleteCommunityComment = async (id: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const { error } = await supabase
+        .from('community_comments')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting community comment:', error);
+      throw error;
+    }
+  };
+
+  const togglePostLike = async (postId: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      // First, check if the user has already liked this post
+      const { data: existingLike, error: checkError } = await supabase
+        .from('post_likes')
+        .select('*')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw checkError;
+      }
+
+      if (existingLike) {
+        // Unlike: delete the like
+        const { error: deleteError } = await supabase
+          .from('post_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        if (deleteError) throw deleteError;
+      } else {
+        // Like: insert the like
+        const { error: insertError } = await supabase
+          .from('post_likes')
+          .insert({
+            post_id: postId,
+            user_id: user.id,
+          });
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error toggling post like:', error);
+      throw error;
+    }
+  };
+
+  const toggleCommentLike = async (commentId: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      // First, check if the user has already liked this comment
+      const { data: existingLike, error: checkError } = await supabase
+        .from('comment_likes')
+        .select('*')
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw checkError;
+      }
+
+      if (existingLike) {
+        // Unlike: delete the like
+        const { error: deleteError } = await supabase
+          .from('comment_likes')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+
+        if (deleteError) throw deleteError;
+      } else {
+        // Like: insert the like
+        const { error: insertError } = await supabase
+          .from('comment_likes')
+          .insert({
+            comment_id: commentId,
+            user_id: user.id,
+          });
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error toggling comment like:', error);
+      throw error;
+    }
+  };
+
   return {
     user,
     loading,
@@ -466,5 +784,17 @@ export function useSupabase() {
     getStreak,
     getDailyStreak,
     updateDailyStreak,
+    // Community functions
+    createCommunityPost,
+    getCommunityPosts,
+    getCommunityPost,
+    updateCommunityPost,
+    deleteCommunityPost,
+    createCommunityComment,
+    getCommunityComments,
+    updateCommunityComment,
+    deleteCommunityComment,
+    togglePostLike,
+    toggleCommentLike,
   };
 } 

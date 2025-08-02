@@ -73,6 +73,70 @@ export interface Database {
           created_at?: string;
         };
       };
+      community_posts: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          content: string;
+          category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          likes_count: number;
+          comments_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          content: string;
+          category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          likes_count?: number;
+          comments_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          content?: string;
+          category?: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          likes_count?: number;
+          comments_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      community_comments: {
+        Row: {
+          id: string;
+          post_id: string;
+          user_id: string;
+          content: string;
+          likes_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          user_id: string;
+          content: string;
+          likes_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          post_id?: string;
+          user_id?: string;
+          content?: string;
+          likes_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }
@@ -105,4 +169,36 @@ export interface SkinPhoto {
   flare_ups?: number | null;
   created_at: string;
 }
-export type ChatMessage = Database['public']['Tables']['chat_history']['Row']; 
+export type ChatMessage = Database['public']['Tables']['chat_history']['Row'];
+
+export interface CommunityPost {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+  updated_at: string;
+  is_liked?: boolean;
+  user?: {
+    email: string;
+    first_name?: string;
+  };
+}
+
+export interface CommunityComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  likes_count: number;
+  created_at: string;
+  updated_at: string;
+  is_liked?: boolean;
+  user?: {
+    email: string;
+    first_name?: string;
+  };
+} 
