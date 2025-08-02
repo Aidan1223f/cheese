@@ -452,10 +452,25 @@ export function useSupabase() {
   };
 
   // Community functions
-  const createCommunityPost = async (title: string, content: string, category: 'advice' | 'support' | 'routine' | 'progress' | 'general' = 'general') => {
+  const createCommunityPost = async (
+    title: string, 
+    content: string, 
+    category: 'advice' | 'support' | 'routine' | 'progress' | 'general' = 'general',
+    photos: string[] = []
+  ) => {
     if (!user) throw new Error('No user logged in');
 
     try {
+      // Upload photos to storage if provided
+      const uploadedPhotoUrls: string[] = [];
+      
+      for (const photoUri of photos) {
+        const photoUrl = await uploadPhoto(photoUri);
+        if (photoUrl) {
+          uploadedPhotoUrls.push(photoUrl);
+        }
+      }
+
       const { data, error } = await supabase
         .from('community_posts')
         .insert({
@@ -463,8 +478,7 @@ export function useSupabase() {
           title,
           content,
           category,
-          likes_count: 0,
-          comments_count: 0,
+          photos: uploadedPhotoUrls,
         })
         .select()
         .single();
@@ -611,6 +625,9 @@ export function useSupabase() {
 
   const getCommunityComments = async (postId: string, limit = 10): Promise<CommunityComment[]> => {
     try {
+      console.log('getCommunityComments called for postId:', postId);
+      console.log('Current user in getCommunityComments:', user?.id);
+      
       const { data, error } = await supabase
         .from('community_comments')
         .select(`
@@ -623,9 +640,12 @@ export function useSupabase() {
 
       if (error) throw error;
       
+      console.log('Raw comments data:', data);
+      
       if (data && user) {
         // Get all comment IDs
         const commentIds = data.map(comment => comment.id);
+        console.log('Comment IDs to check likes for:', commentIds);
         
         // Fetch likes for all comments in one query
         const { data: likesData } = await supabase
@@ -634,15 +654,21 @@ export function useSupabase() {
           .eq('user_id', user.id)
           .in('comment_id', commentIds);
 
+        console.log('Likes data for comments:', likesData);
         const likedCommentIds = new Set(likesData?.map(like => like.comment_id) || []);
+        console.log('Liked comment IDs:', Array.from(likedCommentIds));
         
         // Add is_liked field to each comment
-        return data.map(comment => ({
+        const commentsWithLikes = data.map(comment => ({
           ...comment,
           is_liked: likedCommentIds.has(comment.id)
         }));
+        
+        console.log('Final comments with like states:', commentsWithLikes);
+        return commentsWithLikes;
       }
       
+      console.log('No user or no data, returning:', data || []);
       return data || [];
     } catch (error) {
       console.error('Error fetching community comments:', error);
@@ -731,6 +757,9 @@ export function useSupabase() {
     if (!user) throw new Error('No user logged in');
 
     try {
+      console.log('toggleCommentLike called for commentId:', commentId);
+      console.log('Current user:', user.id);
+      
       // First, check if the user has already liked this comment
       const { data: existingLike, error: checkError } = await supabase
         .from('comment_likes')
@@ -739,12 +768,16 @@ export function useSupabase() {
         .eq('user_id', user.id)
         .single();
 
+      console.log('Existing like check result:', existingLike);
+      console.log('Check error:', checkError);
+
       if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
         throw checkError;
       }
 
       if (existingLike) {
         // Unlike: delete the like
+        console.log('Deleting existing like for comment:', commentId);
         const { error: deleteError } = await supabase
           .from('comment_likes')
           .delete()
@@ -752,8 +785,10 @@ export function useSupabase() {
           .eq('user_id', user.id);
 
         if (deleteError) throw deleteError;
+        console.log('Successfully deleted like for comment:', commentId);
       } else {
         // Like: insert the like
+        console.log('Inserting new like for comment:', commentId);
         const { error: insertError } = await supabase
           .from('comment_likes')
           .insert({
@@ -762,6 +797,7 @@ export function useSupabase() {
           });
 
         if (insertError) throw insertError;
+        console.log('Successfully inserted like for comment:', commentId);
       }
     } catch (error) {
       console.error('Error toggling comment like:', error);

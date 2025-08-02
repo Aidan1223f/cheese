@@ -1,9 +1,10 @@
+import { PhotoGallery } from '@/components/PhotoGallery';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { CommunityComment, CommunityPost } from '@/constants/database.types';
 import { useSupabase } from '@/hooks/useSupabase';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,13 +43,76 @@ export default function PostDetailScreen() {
     }
   }, [postId]);
 
+  // Refresh comment like states when returning to this screen
+  useFocusEffect(
+    useCallback(() => {
+      if (post && comments.length > 0) {
+        refreshPostAndCommentLikeStates();
+      }
+    }, [post, comments.length])
+  );
+
+  const refreshPostAndCommentLikeStates = async () => {
+    try {
+      console.log('Refreshing post and comment like states for post:', postId);
+      
+      // Refresh post like state
+      if (post) {
+        const freshPost = await getCommunityPost(postId);
+        if (freshPost) {
+          setPost(prevPost => ({
+            ...prevPost!,
+            is_liked: freshPost.is_liked,
+            likes_count: freshPost.likes_count
+          }));
+        }
+      }
+      
+      // Refresh comment like states
+      const freshComments = await getCommunityComments(postId);
+      
+      // Update only the like states of existing comments
+      setComments(prevComments => {
+        const updatedComments = prevComments.map(prevComment => {
+          const freshComment = freshComments.find(fc => fc.id === prevComment.id);
+          if (freshComment) {
+            const updatedComment = {
+              ...prevComment,
+              is_liked: freshComment.is_liked,
+              likes_count: freshComment.likes_count
+            };
+            
+            // Log if there's a change in like state
+            if (prevComment.is_liked !== freshComment.is_liked) {
+              console.log(`Comment ${prevComment.id} like state updated: ${prevComment.is_liked} -> ${freshComment.is_liked}`);
+            }
+            
+            return updatedComment;
+          }
+          return prevComment;
+        });
+        
+        console.log(`Updated ${updatedComments.length} comments with fresh like states`);
+        return updatedComments;
+      });
+    } catch (error) {
+      console.error('Error refreshing post and comment like states:', error);
+    }
+  };
+
   const loadPostAndComments = async () => {
     try {
       setLoading(true);
+      console.log('Loading post and comments for postId:', postId);
+      console.log('Current user:', user?.id);
+      
       const [postData, commentsData] = await Promise.all([
         getCommunityPost(postId),
         getCommunityComments(postId)
       ]);
+      
+      console.log('Loaded post data:', postData);
+      console.log('Loaded comments data:', commentsData);
       
       // If we have passed parameters, use them to override the initial like status
       if (postData && isLiked !== undefined && likesCount !== undefined) {
@@ -118,12 +182,23 @@ export default function PostDetailScreen() {
 
   const handleLikeComment = async (commentId: string) => {
     try {
+      console.log('handleLikeComment called for commentId:', commentId);
+      
       // Find the comment and update it optimistically
       const commentIndex = comments.findIndex(comment => comment.id === commentId);
-      if (commentIndex === -1) return;
+      if (commentIndex === -1) {
+        console.log('Comment not found in comments array');
+        return;
+      }
 
       const updatedComments = [...comments];
       const comment = updatedComments[commentIndex];
+      
+      console.log('Original comment state:', {
+        id: comment.id,
+        is_liked: comment.is_liked,
+        likes_count: comment.likes_count
+      });
       
       // Store the original state in case we need to revert
       const originalIsLiked = comment.is_liked;
@@ -132,6 +207,12 @@ export default function PostDetailScreen() {
       // Optimistically update the UI
       comment.likes_count = comment.is_liked ? comment.likes_count - 1 : comment.likes_count + 1;
       comment.is_liked = !comment.is_liked;
+      
+      console.log('Optimistically updated comment state:', {
+        id: comment.id,
+        is_liked: comment.is_liked,
+        likes_count: comment.likes_count
+      });
       
       setComments(updatedComments);
       
@@ -246,6 +327,11 @@ export default function PostDetailScreen() {
           
           <Text style={styles.postTitle}>{post.title}</Text>
           <Text style={styles.postContent}>{post.content}</Text>
+          
+          {/* Display photos if any */}
+          {post.photos && post.photos.length > 0 && (
+            <PhotoGallery photos={post.photos} />
+          )}
           
                      <View style={styles.postFooter}>
              <View style={styles.postStats}>

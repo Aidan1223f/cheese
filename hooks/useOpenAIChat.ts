@@ -1,9 +1,7 @@
 import { useState } from 'react';
 
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
->>>>>>> c38a926 (added community feature)
 
-// Supported chat contexts
 type ChatContext = 'checkin' | 'routine' | 'advice';
 
 const getSystemPrompt = (context: ChatContext): string => {
@@ -27,7 +25,6 @@ const getSystemPrompt = (context: ChatContext): string => {
 
 export function useOpenAIChat(context: ChatContext) {
   const [loading, setLoading] = useState(false);
-
   const sendMessage = async (userMessage: string): Promise<string | null> => {
     setLoading(true);
     try {
