@@ -19,7 +19,7 @@ interface TodoItem {
   id: string;
   title: string;
   completed: boolean;
-  type: 'checkin' | 'routine';
+  type: 'routine';
   route: string;
 }
 
@@ -33,7 +33,6 @@ export default function HomeScreen() {
   const [streak, setStreak] = useState(0);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [todayCompleted, setTodayCompleted] = useState({
-    checkin: false,
     routine: false,
   });
   const [currentDay, setCurrentDay] = useState(1);
@@ -72,7 +71,6 @@ export default function HomeScreen() {
       // Set default values on error
       setStreak(0);
       setTodayCompleted({
-        checkin: false,
         routine: false,
       });
       createTodoItems();
@@ -95,20 +93,12 @@ export default function HomeScreen() {
     // For now, we'll assume items are not completed
     // In a real implementation, you'd check the database for today's entries
     setTodayCompleted({
-      checkin: false,
       routine: false,
     });
   };
 
   const createTodoItems = () => {
     const items: TodoItem[] = [
-      {
-        id: 'checkin',
-        title: 'Daily Check-In',
-        completed: todayCompleted.checkin,
-        type: 'checkin',
-        route: 'checkin',
-      },
       {
         id: 'routine',
         title: 'Skincare Routine',
@@ -121,9 +111,7 @@ export default function HomeScreen() {
   };
 
   const handleTodoPress = (item: TodoItem) => {
-    if (item.type === 'checkin') {
-      router.push('/(tabs)/checkin' as any);
-    } else if (item.type === 'routine') {
+    if (item.type === 'routine') {
       router.push('/(tabs)/routine' as any);
     }
   };
@@ -140,6 +128,24 @@ export default function HomeScreen() {
       'reduce redness': '🌿',
     };
     return goalEmojis[goal.toLowerCase()] || '🎯';
+  };
+
+  const getGreetingFontSize = (name: string) => {
+    const baseFontSize = 28;
+    const nameLength = name.length;
+    
+    // Adjust font size based on name length
+    if (nameLength <= 10) {
+      return baseFontSize;
+    } else if (nameLength <= 15) {
+      return baseFontSize - 2;
+    } else if (nameLength <= 20) {
+      return baseFontSize - 4;
+    } else if (nameLength <= 25) {
+      return baseFontSize - 6;
+    } else {
+      return baseFontSize - 8;
+    }
   };
 
   const getDailyTip = (day: number) => {
@@ -207,7 +213,18 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.greeting, { color: Colors.light.text }]}>
+          <Text 
+            style={[
+              styles.greeting, 
+              { 
+                color: Colors.light.text,
+                fontSize: getGreetingFontSize(user.first_name || 'there')
+              }
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.7}
+          >
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user.first_name || 'there'}! ✨
           </Text>
           <Text style={[styles.subtitle, { color: Colors.light.text }]}>
@@ -231,6 +248,32 @@ export default function HomeScreen() {
           </Text>
         </View>
 
+        {/* Progress Bar */}
+        <TouchableOpacity 
+          style={styles.progressContainer}
+          onPress={() => router.push('/(tabs)/30_days' as any)}
+        >
+          <View style={styles.progressHeader}>
+            <Text style={[styles.progressTitle, { color: Colors.light.text }]}>
+              Progress to 30 Days
+            </Text>
+            <Text style={[styles.progressText, { color: Colors.light.text }]}>
+              {streak}/30
+            </Text>
+          </View>
+                                           <View style={[styles.progressBarBackground, { backgroundColor: '#8B4513' }]}>
+              <View 
+                style={[
+                  styles.progressBarFill, 
+                  { 
+                    flex: Math.min((streak / 30), 1),
+                    backgroundColor: Colors.light.tint
+                  }
+                ]} 
+              />
+            </View>
+        </TouchableOpacity>
+
         {/* To-Do List */}
         <View style={styles.todoSection}>
           <Text style={[styles.sectionTitle, { color: Colors.light.text }]}>
@@ -248,7 +291,7 @@ export default function HomeScreen() {
             >
               <View style={styles.todoContent}>
                 <IconSymbol 
-                  name={item.type === 'checkin' ? 'camera.fill' : 'heart.fill'} 
+                  name="heart.fill"
                   size={20} 
                   color={item.completed ? Colors.light.success : Colors.light.tint} 
                 />
@@ -304,35 +347,36 @@ export default function HomeScreen() {
               ))}
             </View>
           </View>
-        )}
+                 )}
 
-        {/* Quick Actions */}
-        <View style={styles.quickActionsSection}>
-          <Text style={[styles.sectionTitle, { color: Colors.light.text }]}>
-            Quick Actions
-          </Text>
-          <View style={styles.quickActionsContainer}>
-            <TouchableOpacity 
-              style={[styles.quickAction, { backgroundColor: Colors.light.cardBackground }]}
-              onPress={() => router.push('/(tabs)/advice' as any)}
-            >
-              <IconSymbol name="message.fill" size={24} color={Colors.light.tint} />
-              <Text style={[styles.quickActionText, { color: Colors.light.text }]}>
-                Ask Advice
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.quickAction, { backgroundColor: Colors.light.cardBackground }]}
-              onPress={() => router.push('/(tabs)/progress' as any)}
-            >
-              <IconSymbol name="chart.line.uptrend.xyaxis" size={24} color={Colors.light.tint} />
-              <Text style={[styles.quickActionText, { color: Colors.light.text }]}>
-                View Progress
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+         {/* Quick Actions */}
+         <View style={styles.quickActionsSection}>
+           <Text style={[styles.sectionTitle, { color: Colors.light.text }]}>
+             Quick Actions
+           </Text>
+           <View style={styles.quickActionsContainer}>
+             <TouchableOpacity 
+               style={[styles.quickAction, { backgroundColor: Colors.light.cardBackground }]}
+               onPress={() => router.push('/(tabs)/advice' as any)}
+             >
+               <IconSymbol name="message.fill" size={24} color={Colors.light.tint} />
+               <Text style={[styles.quickActionText, { color: Colors.light.text }]}>
+                 Ask Advice
+               </Text>
+             </TouchableOpacity>
+             <TouchableOpacity 
+               style={[styles.quickAction, { backgroundColor: Colors.light.cardBackground }]}
+               onPress={() => router.push('/(tabs)/progress' as any)}
+             >
+               <IconSymbol name="chart.line.uptrend.xyaxis" size={24} color={Colors.light.tint} />
+               <Text style={[styles.quickActionText, { color: Colors.light.text }]}>
+                 View Progress
+               </Text>
+             </TouchableOpacity>
+           </View>
+         </View>
+
+       </ScrollView>
     </SafeAreaView>
   );
 }
@@ -415,6 +459,32 @@ const styles = StyleSheet.create({
   streakSubtext: {
     fontSize: 14,
     opacity: 0.7,
+  },
+  progressContainer: {
+    marginBottom: 32,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  progressBarBackground: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   todoSection: {
     marginBottom: 32,
@@ -506,7 +576,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 6,
   },
-  goalText: {
+    goalText: {
     fontSize: 14,
     fontWeight: '500',
   },
@@ -534,4 +604,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-}); 
+
+ }); 

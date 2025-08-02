@@ -33,6 +33,30 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="advice"
+        options={{
+          href: null, // Hide this tab from the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="routine"
+        options={{
+          href: null, // Hide this tab from the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          href: null, // Hide this tab from the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="30_days"
+        options={{
+          href: null, // Hide this tab from the tab bar
+        }}
+      />
+      <Tabs.Screen
         name="checkin"
         options={{
           title: 'Check-In',
@@ -40,31 +64,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="routine"
-        options={{
-          title: 'Routine',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="advice"
-        options={{
-          title: 'Advice',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />,
         }}
       />
       <Tabs.Screen

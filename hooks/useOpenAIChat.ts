@@ -1,11 +1,7 @@
 import { useState } from 'react';
 
 // TODO: For production, move the API key to a secure backend or env variable
-<<<<<<< HEAD
-const OPENAI_API_KEY = ; // <-- Replace with your real key
-=======
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
->>>>>>> c38a926 (added community feature)
 
 // Supported chat contexts
 type ChatContext = 'checkin' | 'routine' | 'advice';
