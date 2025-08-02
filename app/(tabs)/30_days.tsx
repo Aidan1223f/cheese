@@ -20,7 +20,7 @@ export default function ProgressDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.push('/(tabs)/home')}
+          onPress={() => router.replace('/(tabs)/home')}
         >
           <IconSymbol name="chevron.left" size={24} color={Colors.light.text} />
         </TouchableOpacity>
