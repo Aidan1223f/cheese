@@ -80,6 +80,7 @@ export interface Database {
           title: string;
           content: string;
           category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          photos: string[];
           likes_count: number;
           comments_count: number;
           created_at: string;
@@ -91,6 +92,7 @@ export interface Database {
           title: string;
           content: string;
           category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          photos?: string[];
           likes_count?: number;
           comments_count?: number;
           created_at?: string;
@@ -102,6 +104,7 @@ export interface Database {
           title?: string;
           content?: string;
           category?: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+          photos?: string[];
           likes_count?: number;
           comments_count?: number;
           created_at?: string;
@@ -177,6 +180,7 @@ export interface CommunityPost {
   title: string;
   content: string;
   category: 'advice' | 'support' | 'routine' | 'progress' | 'general';
+  photos: string[];
   likes_count: number;
   comments_count: number;
   created_at: string;

@@ -1,3 +1,5 @@
+import { PhotoGallery } from '@/components/PhotoGallery';
+import { PhotoPicker } from '@/components/PhotoPicker';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { CommunityPost } from '@/constants/database.types';
@@ -31,6 +33,7 @@ export default function CommunityScreen() {
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostCategory, setNewPostCategory] = useState<'advice' | 'support' | 'routine' | 'progress' | 'general'>('general');
+  const [newPostPhotos, setNewPostPhotos] = useState<string[]>([]);
   const [creatingPost, setCreatingPost] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
@@ -118,12 +121,13 @@ export default function CommunityScreen() {
 
     try {
       setCreatingPost(true);
-      await createCommunityPost(newPostTitle.trim(), newPostContent.trim(), newPostCategory);
+      await createCommunityPost(newPostTitle.trim(), newPostContent.trim(), newPostCategory, newPostPhotos);
       
       // Reset form
       setNewPostTitle('');
       setNewPostContent('');
       setNewPostCategory('general');
+      setNewPostPhotos([]);
       setShowCreateForm(false);
       
       // Reload posts
@@ -304,6 +308,11 @@ export default function CommunityScreen() {
                  {post.content}
                </Text>
                
+               {/* Display photos if any */}
+               {post.photos && post.photos.length > 0 && (
+                 <PhotoGallery photos={post.photos} />
+               )}
+               
                <View style={styles.postFooter}>
                  <View style={styles.postStats}>
                    <TouchableOpacity
@@ -441,6 +450,12 @@ export default function CommunityScreen() {
               onSubmitEditing={Keyboard.dismiss}
               keyboardType="default"
               enablesReturnKeyAutomatically={true}
+            />
+
+            <PhotoPicker
+              photos={newPostPhotos}
+              onPhotosChange={setNewPostPhotos}
+              maxPhotos={3}
             />
 
             <View style={styles.modalActions}>
