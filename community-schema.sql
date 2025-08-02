@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS community_posts (
   title VARCHAR(100) NOT NULL,
   content TEXT NOT NULL,
   category VARCHAR(20) NOT NULL DEFAULT 'general' CHECK (category IN ('advice', 'support', 'routine', 'progress', 'general')),
+  photos TEXT[] DEFAULT '{}', -- Array of photo URLs
   likes_count INTEGER DEFAULT 0,
   comments_count INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
