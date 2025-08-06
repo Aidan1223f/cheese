@@ -1,3 +1,4 @@
+import { PhotoAnalysisDemo } from '@/components/PhotoAnalysisDemo';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { SkinPhoto } from '@/constants/database.types';
@@ -322,6 +323,14 @@ export default function ProgressScreen() {
           <Text style={styles.progressSubtitle}>
             Keep going - you're on fire! 🔥
           </Text>
+        </View>
+
+        {/* Photo Analysis Demo */}
+        <View style={styles.photoAnalysisSection}>
+          <Text style={[styles.sectionTitle, { fontSize: Math.max(16, width * 0.04), color: Colors.light.text }]}>
+            Photo Analysis (Test)
+          </Text>
+          <PhotoAnalysisDemo userId={user?.id} />
         </View>
 
         {streak > 0 && (() => {
@@ -860,5 +869,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 15,
     paddingHorizontal: 10,
+  },
+  photoAnalysisSection: {
+    marginBottom: 32,
   },
 }); 
