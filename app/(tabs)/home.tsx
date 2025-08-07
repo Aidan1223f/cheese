@@ -241,7 +241,7 @@ export default function HomeScreen() {
             </Text>
           </View>
           <Text style={[styles.streakNumber, { color: Colors.light.text }]}>
-            {streak} day{streak > 1 ? 's' : ''}
+            {streak} day{(streak > 1 || streak === 0) ? 's' : ''}
           </Text>
           <Text style={[styles.streakSubtext, { color: Colors.light.text }]}>
             Keep up the great work! 🔥
