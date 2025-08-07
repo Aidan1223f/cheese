@@ -145,12 +145,12 @@ export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
       
       <View style={styles.comparisonContainer}>
         <View style={styles.comparisonItem}>
-          <Text style={styles.comparisonLabel}>Clarity</Text>
+          <Text style={styles.comparisonLabel}>Redness & Irritation</Text>
           <Text style={[
             styles.comparisonValue,
-            { color: result.clarityImprovement >= 0 ? '#4CAF50' : '#F44336' }
+            { color: result["Redness & Irritation"] >= 0 ? '#4CAF50' : '#F44336' }
           ]}>
-            {result.clarityImprovement >= 0 ? '+' : ''}{result.clarityImprovement}%
+            {result["Redness & Irritation"] >= 0 ? '+' : ''}{result["Redness & Irritation"]}%
           </Text>
         </View>
         
@@ -158,36 +158,49 @@ export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
           <Text style={styles.comparisonLabel}>Texture</Text>
           <Text style={[
             styles.comparisonValue,
-            { color: result.textureImprovement >= 0 ? '#4CAF50' : '#F44336' }
+            { color: result.texture >= 0 ? '#4CAF50' : '#F44336' }
           ]}>
-            {result.textureImprovement >= 0 ? '+' : ''}{result.textureImprovement}%
+            {result.texture >= 0 ? '+' : ''}{result.texture}%
           </Text>
         </View>
         
         <View style={styles.comparisonItem}>
-          <Text style={styles.comparisonLabel}>Overall</Text>
-          <Text style={[
-            styles.comparisonValue,
-            { color: result.overallImprovement >= 0 ? '#4CAF50' : '#F44336' }
-          ]}>
-            {result.overallImprovement >= 0 ? '+' : ''}{result.overallImprovement}%
-          </Text>
-        </View>
+          <Text style={styles.comparisonLabel}>Tone & Marks</Text>
+           <Text style={[
+             styles.comparisonValue,
+             { color: result["Tone & Marks"] >= 0 ? '#4CAF50' : '#F44336' }
+           ]}>
+             {result["Tone & Marks"] >= 0 ? '+' : ''}{result["Tone & Marks"]}%
+           </Text>
+         </View>
+         
+         <View style={styles.comparisonItem}>
+           <Text style={styles.comparisonLabel}>Under-Eyes</Text>
+           <Text style={[
+             styles.comparisonValue,
+             { color: typeof result.underEyes === 'number' && result.underEyes >= 0 ? '#4CAF50' : '#F44336' }
+           ]}>
+             {typeof result.underEyes === 'number' 
+               ? `${result.underEyes >= 0 ? '+' : ''}${result.underEyes}%`
+               : result.underEyes
+             }
+           </Text>
+         </View>
+         
+         <View style={styles.comparisonItem}>
+           <Text style={styles.comparisonLabel}>Overall</Text>
+           <Text style={[
+             styles.comparisonValue,
+             { color: result["Visible Progress Score"] >= 0 ? '#4CAF50' : '#F44336' }
+           ]}>
+             {result["Visible Progress Score"] >= 0 ? '+' : ''}{result["Visible Progress Score"]}%
+           </Text>
+         </View>
       </View>
-
-      <View style={styles.comparisonItem}>
-          <Text style={styles.comparisonLabel}>Under-Eyes</Text>
-          <Text style={[
-            styles.comparisonValue,
-            { color: result.underEyesImprovement >= 0 ? '#4CAF50' : '#F44336' }
-          ]}>
-            {result.underEyesImprovement >= 0 ? '+' : ''}{result.underEyesImprovement}%
-          </Text>
-        </View>
 
       <View style={styles.feedbackContainer}>
         <Text style={styles.feedbackTitle}>Progress Feedback</Text>
-        <Text style={styles.feedbackText}>{result.comparisonFeedback}</Text>
+        <Text style={styles.feedbackText}>{result.feedback}</Text>
       </View>
 
       {result.timeBetweenPhotos > 0 && (
@@ -501,4 +514,4 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
   },
-}); 
+});
