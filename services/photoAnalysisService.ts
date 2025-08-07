@@ -14,11 +14,14 @@ export interface SkinAnalysisResult {
 }
 
 export interface PhotoComparisonResult {
-  clarityImprovement: number; // percentage (maps to Redness & Irritation)
-  textureImprovement: number; // percentage (maps to texture)
-  underEyesImprovement: number; // percentage (maps to underEyes)
-  overallImprovement: number; // percentage (maps to Visible Progress Score)
-  comparisonFeedback: string;
+  "Redness & Irritation": number; // percentage change
+  texture: number; // percentage change
+  "Tone & Marks": number; // percentage change
+  underEyes: number | string; // percentage change or description
+  "Visible Progress Score": number; // percentage change
+  feedback: string;
+  areasOfFocus: string[];
+  suggestion: string;
   timeBetweenPhotos: number; // days
 }
 
@@ -168,6 +171,9 @@ class PhotoAnalysisService {
     } catch (error) {
       console.error('Photo analysis error:', error);
       
+      // Store the last error for diagnostics
+      this.lastError = error instanceof Error ? error.message : String(error);
+      
       if (error instanceof PhotoAnalysisError) {
         return {
           success: false,
@@ -204,23 +210,57 @@ class PhotoAnalysisService {
         this.processImage(previousPhotoUrl)
       ]);
 
-      // Create comparison prompt
-      const comparisonPrompt = this.createComparisonPrompt(userHabits, userData);
+      // Create analysis prompt for both photos
+      const analysisPrompt = this.createAnalysisPrompt(userHabits, userData);
 
-      // Call OpenAI Vision API with both images
-      const result = await this.callOpenAIVisionComparison(
-        currentProcessed,
-        previousProcessed,
-        comparisonPrompt
+      // Analyze both photos individually using the same prompt
+      const [currentResult, previousResult] = await Promise.all([
+        this.callOpenAIVision(currentProcessed, analysisPrompt),
+        this.callOpenAIVision(previousProcessed, analysisPrompt)
+      ]);
+
+      // Parse both results
+      const currentAnalysis = this.parseAnalysisResult(currentResult);
+      const previousAnalysis = this.parseAnalysisResult(previousResult);
+
+      // Calculate percentage changes
+      const clarityImprovement = this.calculatePercentageChange(
+        previousAnalysis.rednessIrritation, 
+        currentAnalysis.rednessIrritation
+      );
+      const textureImprovement = this.calculatePercentageChange(
+        previousAnalysis.texture, 
+        currentAnalysis.texture
+      );
+      const underEyesImprovement = this.calculatePercentageChange(
+        typeof previousAnalysis.underEyes === 'number' ? previousAnalysis.underEyes : 50,
+        typeof currentAnalysis.underEyes === 'number' ? currentAnalysis.underEyes : 50
+      );
+      const overallImprovement = this.calculatePercentageChange(
+        previousAnalysis.visibleProgressScore, 
+        currentAnalysis.visibleProgressScore
       );
 
-      // Parse comparison result
-      const comparisonResult = this.parseComparisonResult(result);
+      // Create comparison result using current photo's values for display
+      const comparisonResult: PhotoComparisonResult = {
+        "Redness & Irritation": clarityImprovement,
+        texture: textureImprovement,
+        "Tone & Marks": this.calculatePercentageChange(
+          previousAnalysis.toneMarks, 
+          currentAnalysis.toneMarks
+        ),
+        underEyes: underEyesImprovement,
+        "Visible Progress Score": overallImprovement,
+        feedback: currentAnalysis.feedback,
+        areasOfFocus: currentAnalysis.areasOfFocus,
+        suggestion: currentAnalysis.suggestion,
+        timeBetweenPhotos: this.calculateDaysBetween(previousAnalysis.timestamp, currentAnalysis.timestamp)
+      };
 
       return {
         success: true,
         data: comparisonResult,
-        cost: 0.04 // estimated cost for comparison analysis
+        cost: 0.04 // estimated cost for two individual analyses
       };
 
     } catch (error) {
@@ -272,10 +312,25 @@ class PhotoAnalysisService {
       // Convert to base64 for API upload
       const base64Image = await imageToBase64(processedImage.uri);
       
-      console.log('Base64 image length:', base64Image.length);
-      console.log('Base64 image starts with:', base64Image.substring(0, 50) + '...');
+      // Ensure proper base64 format for OpenAI Vision API
+      const formattedBase64 = base64Image.startsWith('data:') 
+        ? base64Image 
+        : `data:image/jpeg;base64,${base64Image}`;
       
-      return base64Image;
+      console.log('Base64 image length:', formattedBase64.length);
+      console.log('Base64 image starts with:', formattedBase64.substring(0, 50) + '...');
+      
+      // Validate base64 format
+      if (!formattedBase64.includes('data:image/')) {
+        console.warn('Base64 image may not have proper data URL format');
+      }
+      
+      // Check if image is too large (OpenAI has limits)
+      if (formattedBase64.length > 20 * 1024 * 1024) { // 20MB limit
+        console.warn('Image may be too large for OpenAI Vision API');
+      }
+      
+      return formattedBase64;
     } catch (error) {
       console.error('Image processing error:', error);
       throw new PhotoAnalysisError(
@@ -398,7 +453,7 @@ ${habitsContext ? `HABITS CONTEXT: ${habitsContext}` : ''}
 ### YOUR ROLE:
 - Act as a supportive, kind visual coach
 - Identify and **gently validate progress**
-- Be honest about what’s improving
+- Be honest about what's improving
 - Offer **ONE clear habit or focus area** for the user to maintain or try
 - Give specific encouragement and a direction to focus on based on USER CONTEXT and HABITS CONTEXT
 - Consider the user's skin goals and concerns when providing feedback
@@ -557,60 +612,127 @@ Use this exact JSON format — return ONLY valid JSON:
       console.log('Calling OpenAI Vision API with image URL length:', imageUrl.length);
       console.log('Image URL starts with:', imageUrl.substring(0, 50) + '...');
       
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a wellness app assistant that provides general appearance feedback for selfies. This is for personal wellness tracking only, not medical analysis. Focus on positive, encouraging feedback about visible appearance features. Avoid medical terminology and provide supportive wellness suggestions.'
+      // Add retry logic for intermittent failures
+      let lastError: any = null;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Attempt ${attempt}/${maxRetries} to call OpenAI Vision API`);
+          
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
             },
-            {
-              role: 'user',
-              content: [
+            body: JSON.stringify({
+                             model: 'gpt-4-turbo',
+              messages: [
                 {
-                  type: 'text',
-                  text: prompt
+                  role: 'system',
+                  content: 'You are a wellness app assistant that provides general appearance feedback for selfies. This is for personal wellness tracking only, not medical analysis. Focus on positive, encouraging feedback about visible appearance features. Avoid medical terminology and provide supportive wellness suggestions. IMPORTANT: Always respond with ONLY valid JSON - no explanations, no markdown formatting, no additional text.'
                 },
                 {
-                  type: 'image_url',
-                  image_url: {
-                    url: imageUrl
-                  }
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: prompt
+                    },
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: imageUrl
+                      }
+                    }
+                  ]
                 }
-              ]
+              ],
+              max_tokens: 500,
+              temperature: 0.3,
+            }),
+          });
+
+          console.log('OpenAI API response status:', response.status);
+          console.log('OpenAI API response headers:', Object.fromEntries(response.headers.entries()));
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('OpenAI API error response:', errorData);
+            
+            // Check for rate limiting
+            if (response.status === 429 || errorData.error?.message?.includes('rate limit')) {
+              console.warn('Rate limit hit, will retry after delay');
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
+                continue;
+              }
             }
-          ],
-          max_tokens: 500,
-          temperature: 0.3,
-        }),
-      });
+            
+            // Check for policy violation errors
+            if (errorData.error?.message?.includes('policy') || 
+                errorData.error?.message?.includes('violation') ||
+                errorData.error?.message?.includes('refuse')) {
+              console.error('Policy violation detected. This may be due to:');
+              console.error('1. Medical terminology in prompts');
+              console.error('2. Image content issues');
+              console.error('3. API key restrictions');
+              console.error('4. Rate limiting');
+              
+              throw new PhotoAnalysisError(
+                `OpenAI policy violation: ${errorData.error?.message || 'Content policy violation'}`,
+                'API_ERROR',
+                errorData
+              );
+            }
+            
+            // Check for quota exceeded
+            if (errorData.error?.message?.includes('quota') || errorData.error?.message?.includes('billing')) {
+              throw new PhotoAnalysisError(
+                `OpenAI quota exceeded: ${errorData.error?.message || 'Billing quota exceeded'}`,
+                'INSUFFICIENT_CREDITS',
+                errorData
+              );
+            }
+            
+            throw new PhotoAnalysisError(
+              `OpenAI API error: ${errorData.error?.message || 'Unknown error'}`,
+              'API_ERROR',
+              errorData
+            );
+          }
 
-      console.log('OpenAI API response status:', response.status);
-      console.log('OpenAI API response headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('OpenAI API error response:', errorData);
-        throw new PhotoAnalysisError(
-          `OpenAI API error: ${errorData.error?.message || 'Unknown error'}`,
-          'API_ERROR',
-          errorData
-        );
+          const data = await response.json();
+          console.log('OpenAI API success response:', JSON.stringify(data, null, 2));
+          
+          const content = data.choices[0]?.message?.content;
+          console.log('AI Response content:', content);
+          
+          return content;
+          
+        } catch (attemptError) {
+          lastError = attemptError;
+          console.error(`Attempt ${attempt} failed:`, attemptError);
+          
+          // If it's a policy violation or quota error, don't retry
+          if (attemptError instanceof PhotoAnalysisError && 
+              (attemptError.code === 'API_ERROR' || attemptError.code === 'INSUFFICIENT_CREDITS')) {
+            throw attemptError;
+          }
+          
+          // For other errors, retry with exponential backoff
+          if (attempt < maxRetries) {
+            const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+            console.log(`Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
       }
-
-      const data = await response.json();
-      console.log('OpenAI API success response:', JSON.stringify(data, null, 2));
       
-      const content = data.choices[0]?.message?.content;
-      console.log('AI Response content:', content);
+      // If all retries failed
+      throw lastError || new Error('All retry attempts failed');
       
-      return content;
     } catch (error) {
       console.error('Error in callOpenAIVision:', error);
       throw error;
@@ -632,7 +754,7 @@ Use this exact JSON format — return ONLY valid JSON:
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+                 model: 'gpt-4-turbo',
         messages: [
           {
             role: 'system',
@@ -684,22 +806,62 @@ Use this exact JSON format — return ONLY valid JSON:
   private parseAnalysisResult(response: string): SkinAnalysisResult {
     try {
       // Check if AI refused to analyze - be more specific about refusal
-      if (response.toLowerCase().includes("i'm sorry, i can't assist") || 
-          response.toLowerCase().includes("i cannot analyze") ||
-          response.toLowerCase().includes("unable to process") ||
-          response.toLowerCase().includes("cannot provide analysis")) {
+      const refusalPhrases = [
+        "i'm sorry, i can't assist",
+        "i cannot analyze",
+        "unable to process",
+        "cannot provide analysis",
+        "i'm unable to",
+        "i cannot help",
+        "i'm not able to",
+        "i cannot process",
+        "unable to help",
+        "cannot assist"
+      ];
+      
+      const lowerResponse = response.toLowerCase();
+      const isRefusal = refusalPhrases.some(phrase => lowerResponse.includes(phrase));
+      
+      if (isRefusal) {
         console.warn('AI refused to analyze image, providing fallback response');
+        console.log('Refusal response:', response);
         return this.createFallbackAnalysisResult();
       }
 
-      // Extract JSON from response
+      // Extract JSON from response - try multiple approaches
+      let jsonString = '';
+      
+      // First try: look for JSON between curly braces
       const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.warn('No JSON found in response, providing fallback');
-        return this.createFallbackAnalysisResult();
+      if (jsonMatch) {
+        jsonString = jsonMatch[0];
+      } else {
+        // Second try: look for JSON after "```json" or "```"
+        const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+        if (codeBlockMatch) {
+          jsonString = codeBlockMatch[1];
+        } else {
+          // Third try: look for any JSON-like structure
+          const anyJsonMatch = response.match(/\{[^}]*"[^"]*"[^}]*\}/);
+          if (anyJsonMatch) {
+            jsonString = anyJsonMatch[0];
+          } else {
+            console.warn('No JSON found in response, providing fallback');
+            console.log('Raw response:', response);
+            return this.createFallbackAnalysisResult();
+          }
+        }
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', parseError);
+        console.log('Attempted to parse:', jsonString);
+        console.log('Raw response:', response);
+        return this.createFallbackAnalysisResult();
+      }
       
       // Log the actual response for debugging
       console.log('AI Response JSON:', JSON.stringify(parsed, null, 2));
@@ -802,11 +964,14 @@ Use this exact JSON format — return ONLY valid JSON:
       // Since the new format uses the same scoring as single photo analysis,
       // we'll treat these as improvement scores directly
       return {
-        clarityImprovement: rednessIrritation,
-        textureImprovement: texture,
-        underEyesImprovement: typeof underEyes === 'number' ? underEyes : 0,
-        overallImprovement: visibleProgressScore,
-        comparisonFeedback: feedback,
+        "Redness & Irritation": rednessIrritation,
+        texture: texture,
+        "Tone & Marks": toneMarks,
+        underEyes: typeof underEyes === 'number' ? underEyes : underEyes,
+        "Visible Progress Score": visibleProgressScore,
+        feedback: feedback,
+        areasOfFocus: parsed.areasOfFocus || parsed.areasOfConcern || [],
+        suggestion: suggestion,
         timeBetweenPhotos: timeBetweenPhotos
       };
 
@@ -819,6 +984,24 @@ Use this exact JSON format — return ONLY valid JSON:
         error
       );
     }
+  }
+
+  /**
+   * Calculate percentage change between two values
+   */
+  private calculatePercentageChange(previous: number, current: number): number {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  }
+
+  /**
+   * Calculate days between two timestamps
+   */
+  private calculateDaysBetween(previousTimestamp: string, currentTimestamp: string): number {
+    const previous = new Date(previousTimestamp);
+    const current = new Date(currentTimestamp);
+    const diffTime = Math.abs(current.getTime() - previous.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
   /**
@@ -859,6 +1042,32 @@ Use this exact JSON format — return ONLY valid JSON:
       size: this.cache.size,
       keys: Array.from(this.cache.keys())
     };
+  }
+
+  /**
+   * Get service status and diagnostics
+   */
+  getServiceStatus(): {
+    apiKeyConfigured: boolean;
+    apiKeyLength: number;
+    cacheSize: number;
+    lastError?: string;
+  } {
+    return {
+      apiKeyConfigured: !!OPENAI_API_KEY,
+      apiKeyLength: OPENAI_API_KEY.length,
+      cacheSize: this.cache.size,
+      lastError: this.lastError
+    };
+  }
+
+  private lastError?: string;
+
+  /**
+   * Clear last error
+   */
+  clearLastError(): void {
+    this.lastError = undefined;
   }
 }
 
