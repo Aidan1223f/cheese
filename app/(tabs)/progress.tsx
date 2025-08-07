@@ -1,3 +1,4 @@
+import { PhotoAnalysisDemo } from '@/components/PhotoAnalysisDemo';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { SkinPhoto } from '@/constants/database.types';
@@ -7,13 +8,14 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,9 +25,8 @@ export default function ProgressScreen() {
   const [selectedPhoto, setSelectedPhoto] = useState<SkinPhoto | null>(null);
   const [streak, setStreak] = useState(0);
   const [averageMood, setAverageMood] = useState(0);
-  const [averageSleep, setAverageSleep] = useState(0);
-  const [averageStress, setAverageStress] = useState(0);
-  const [averageFlareUps, setAverageFlareUps] = useState(0);
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<{ month: number; year: number } | null>(null);
   
   const colorScheme = useColorScheme();
   const { user, getSkinPhotos, getStreak, signOut } = useSupabase();
@@ -65,28 +66,6 @@ export default function ProgressScreen() {
         const avgMood = Math.round(totalMood / photosData.length);
         console.log('Progress: Average mood calculated:', avgMood);
         setAverageMood(avgMood);
-        
-        // Calculate averages for new metrics
-        const photosWithSleep = photosData.filter(photo => photo.sleep_quality !== null);
-        if (photosWithSleep.length > 0) {
-          const totalSleep = photosWithSleep.reduce((sum, photo) => sum + (photo.sleep_quality || 0), 0);
-          const avgSleep = Math.round(totalSleep / photosWithSleep.length);
-          setAverageSleep(avgSleep);
-        }
-        
-        const photosWithStress = photosData.filter(photo => photo.stress_level !== null);
-        if (photosWithStress.length > 0) {
-          const totalStress = photosWithStress.reduce((sum, photo) => sum + (photo.stress_level || 0), 0);
-          const avgStress = Math.round(totalStress / photosWithStress.length);
-          setAverageStress(avgStress);
-        }
-        
-        const photosWithFlareUps = photosData.filter(photo => photo.flare_ups !== null);
-        if (photosWithFlareUps.length > 0) {
-          const totalFlareUps = photosWithFlareUps.reduce((sum, photo) => sum + (photo.flare_ups || 0), 0);
-          const avgFlareUps = Math.round(totalFlareUps / photosWithFlareUps.length);
-          setAverageFlareUps(avgFlareUps);
-        }
       }
     } catch (error) {
       console.error('Error loading progress data:', error);
@@ -103,6 +82,23 @@ export default function ProgressScreen() {
   const getMoodEmoji = (rating: number) => {
     const emojis = ['😔', '😕', '😐', '🙂', '😊'];
     return emojis[rating - 1] || '😐';
+  };
+
+  const getMoodColor = (rating: number) => {
+    switch (rating) {
+      case 1:
+        return '#FF6B6B'; // Red for sad
+      case 2:
+        return '#FFB86C'; // Orange for neutral
+      case 3:
+        return '#4ECDC4'; // Teal for happy
+      case 4:
+        return '#96CEB4'; // Green for very happy
+      case 5:
+        return '#DDA0DD'; // Pink for ecstatic
+      default:
+        return '#E0E0E0'; // Gray for no rating
+    }
   };
 
   const getStreakBadge = (streak: number) => {
@@ -122,6 +118,65 @@ export default function ProgressScreen() {
     });
   };
 
+  const getAvailableMonths = () => {
+    const months = new Set<string>();
+    
+    // Add current month
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+    months.add(currentMonthKey);
+    
+    // Add months with photos
+    photos.forEach(photo => {
+      const date = new Date(photo.created_at);
+      const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+      months.add(monthKey);
+    });
+    
+    return Array.from(months).map(monthKey => {
+      const [year, month] = monthKey.split('-').map(Number);
+      return { month, year };
+    }).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.month - a.month;
+    });
+  };
+
+  const getCurrentDisplayMonth = () => {
+    if (selectedMonth) {
+      return selectedMonth;
+    }
+    // Default to current month regardless of photos
+    const now = new Date();
+    return { month: now.getMonth(), year: now.getFullYear() };
+  };
+
+  const formatMonthYear = (month: number, year: number) => {
+    const date = new Date(year, month);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  };
+
+  const handleShareProgress = async () => {
+    if (!user) {
+      console.error('User not logged in, cannot share progress.');
+      return;
+    }
+
+    const baseUrl = 'https://your-app-url.com/progress'; // Replace with your actual app URL
+    const shareUrl = `${baseUrl}?userId=${user.id}`;
+
+    try {
+      await Share.share({
+        message: `Check out my skincare progress! \n\n${shareUrl}`,
+      });
+      console.log('Progress shared successfully!');
+    } catch (error) {
+      console.error('Error sharing progress:', error);
+    }
+  };
 
 
   if (loading) {
@@ -158,21 +213,16 @@ export default function ProgressScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: Colors.light.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={[styles.title, { fontSize: Math.max(24, width * 0.06), color: Colors.light.text }]}>
-            Your Progress
-          </Text>
-          <Text style={[styles.subtitle, { fontSize: Math.max(14, width * 0.035), color: Colors.light.text }]}>
-            Track your skincare journey
-          </Text>
-          <TouchableOpacity 
-            style={[styles.signOutButton, { backgroundColor: Colors.light.tint }]}
-            onPress={() => {
-              signOut();
-              router.replace('/auth');
-            }}
-          >
-            <Text style={[styles.signOutText, { color: '#fff' }]}>Sign Out</Text>
-          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text style={[styles.title, { fontSize: Math.max(24, width * 0.06), color: Colors.light.text }]}>
+                Your Progress
+              </Text>
+              <Text style={[styles.subtitle, { fontSize: Math.max(14, width * 0.035), color: Colors.light.text }]}>
+                Track your skincare journey
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.statsContainer}>
@@ -202,44 +252,86 @@ export default function ProgressScreen() {
               {photos.length}
             </Text>
             <Text style={[styles.statLabel, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text }]}>
-              Photos
+              Check Ins
             </Text>
           </View>
         </View>
 
-        {averageSleep > 0 && (
-          <View style={styles.statsContainer}>
-            <View style={[styles.statCard, { backgroundColor: Colors.light.background, padding: Math.max(15, width * 0.04), borderRadius: Math.max(10, width * 0.025) }]}>
-              <IconSymbol name="bed.double.fill" size={Math.max(20, width * 0.05)} color="#9B59B6" />
-              <Text style={[styles.statNumber, { fontSize: Math.max(20, width * 0.05), color: Colors.light.text }]}>
-                {averageSleep}
-              </Text>
-              <Text style={[styles.statLabel, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text }]}>
-                Sleep
-              </Text>
-            </View>
+        {photos.length >= 2 && (
+          <View style={[styles.transformationContainer, { backgroundColor: Colors.light.background, padding: Math.max(20, width * 0.05), borderRadius: Math.max(12, width * 0.03), marginBottom: 32 }]}>
+            <Text style={[styles.transformationTitle, { fontSize: Math.max(18, width * 0.045), color: Colors.light.text, marginBottom: Math.max(16, width * 0.04) }]}>
+              Transformation Progress
+            </Text>
+            
+            <View style={styles.transformationComparison}>
+              {/* Day 1 Photo */}
+              <View style={styles.transformationPhotoContainer}>
+                <Image 
+                  source={{ uri: photos[photos.length - 1].photo_url }} 
+                  style={[styles.transformationPhoto, { width: Math.max(160, width * 0.4), height: Math.max(160, width * 0.4) }]} 
+                />
+                <Text style={[styles.transformationDayLabel, { fontSize: Math.max(12, width * 0.03), color: Colors.light.text, marginTop: 8 }]}>
+                  Day 1
+                </Text>
+                <Text style={[styles.transformationDate, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text, opacity: 0.7 }]}>
+                  {new Date(photos[photos.length - 1].created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </Text>
+              </View>
 
-            <View style={[styles.statCard, { backgroundColor: Colors.light.background, padding: Math.max(15, width * 0.04), borderRadius: Math.max(10, width * 0.025) }]}>
-              <IconSymbol name="brain.head.profile" size={Math.max(20, width * 0.05)} color="#E74C3C" />
-              <Text style={[styles.statNumber, { fontSize: Math.max(20, width * 0.05), color: Colors.light.text }]}>
-                {averageStress}
-              </Text>
-              <Text style={[styles.statLabel, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text }]}>
-                Stress
-              </Text>
+              {/* Most Recent Photo */}
+              <View style={styles.transformationPhotoContainer}>
+                <Image 
+                  source={{ uri: photos[0].photo_url }} 
+                  style={[styles.transformationPhoto, { width: Math.max(160, width * 0.4), height: Math.max(160, width * 0.4) }]} 
+                />
+                <Text style={[styles.transformationDayLabel, { fontSize: Math.max(12, width * 0.03), color: Colors.light.text, marginTop: 8 }]}>
+                  Day {photos.length}
+                </Text>
+                <Text style={[styles.transformationDate, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text, opacity: 0.7 }]}>
+                  {new Date(photos[0].created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </Text>
+              </View>
             </View>
-
-            <View style={[styles.statCard, { backgroundColor: Colors.light.background, padding: Math.max(15, width * 0.04), borderRadius: Math.max(10, width * 0.025) }]}>
-              <IconSymbol name="exclamationmark.triangle.fill" size={Math.max(20, width * 0.05)} color="#F39C12" />
-              <Text style={[styles.statNumber, { fontSize: Math.max(20, width * 0.05), color: Colors.light.text }]}>
-                {averageFlareUps}
+            <View style={styles.shareSection}>
+              <Text style={[styles.transformationPrompt, { fontSize: Math.max(12, width * 0.03), color: Colors.light.text }]}>
+                Share your progress!
               </Text>
-              <Text style={[styles.statLabel, { fontSize: Math.max(10, width * 0.025), color: Colors.light.text }]}>
-                Flare-ups
-              </Text>
+              <TouchableOpacity 
+                style={styles.shareButton}
+                onPress={handleShareProgress}
+              >
+                <IconSymbol name="square.and.arrow.up" size={24} color="#8FAE8B" />
+              </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* Progress Banner */}
+        <View style={styles.progressBanner}>
+          <Text style={styles.progressTitle}>
+            Your skin clarity improved by{' '}
+            <Text style={styles.progressPercentage}>+23%</Text>
+          </Text>
+          <Text style={styles.progressSubtitle}>
+            Keep going - you're on fire! 🔥
+          </Text>
+        </View>
+
+        {/* Photo Analysis Demo */}
+        <View style={styles.photoAnalysisSection}>
+          <Text style={[styles.sectionTitle, { fontSize: Math.max(16, width * 0.04), color: Colors.light.text }]}>
+            Photo Analysis (Test)
+          </Text>
+          <PhotoAnalysisDemo userId={user?.id} />
+        </View>
 
         {streak > 0 && (() => {
           const badge = getStreakBadge(streak);
@@ -271,23 +363,119 @@ export default function ProgressScreen() {
             <Text style={[styles.sectionTitle, { fontSize: Math.max(16, width * 0.04), color: Colors.light.text }]}>
               Your Journey
             </Text>
-            <View style={styles.photoGrid}>
-              {photos.slice(0, 9).map((photo, index) => (
-                <TouchableOpacity
-                  key={photo.id}
-                  style={[
-                    { width: photoSize, height: photoSize, marginBottom: 10, borderRadius: 8, overflow: 'hidden' },
-                    selectedPhoto?.id === photo.id && styles.selectedPhoto
-                  ]}
-                  onPress={() => handlePhotoPress(photo)}
+            
+            {/* Calendar Container */}
+            <View style={styles.calendarContainer}>
+              {/* Month Header */}
+              <View style={styles.monthHeader}>
+                <TouchableOpacity 
+                  style={styles.monthSelector}
+                  onPress={() => setShowMonthDropdown(!showMonthDropdown)}
                 >
-                  <Image source={{ uri: photo.photo_url }} style={styles.photo} />
-                  <View style={styles.photoOverlay}>
-                    <Text style={[styles.photoMood, { fontSize: Math.max(14, width * 0.035) }]}>{getMoodEmoji(photo.mood_rating)}</Text>
-                    <Text style={[styles.photoDate, { fontSize: Math.max(8, width * 0.02) }]}>{formatDate(photo.created_at)}</Text>
-                  </View>
+                  <Text style={styles.monthText}>
+                    {(() => {
+                      const currentMonth = getCurrentDisplayMonth();
+                      return formatMonthYear(currentMonth.month, currentMonth.year);
+                    })()}
+                  </Text>
+                  <IconSymbol 
+                    name={showMonthDropdown ? "chevron.up" : "chevron.down"} 
+                    size={16} 
+                    color="#424242" 
+                  />
                 </TouchableOpacity>
-              ))}
+                
+                {/* Dropdown Menu */}
+                {showMonthDropdown && (
+                  <View style={styles.dropdownMenu}>
+                    {getAvailableMonths().map((monthData, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setSelectedMonth(monthData);
+                          setShowMonthDropdown(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>
+                          {formatMonthYear(monthData.month, monthData.year)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+              
+              {/* Week Headers */}
+              <View style={styles.weekHeaders}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <Text key={index} style={styles.weekHeaderText}>{day}</Text>
+                ))}
+              </View>
+              
+              {/* Calendar Grid */}
+              <View style={styles.calendarGrid}>
+                {(() => {
+                  if (photos.length === 0) return null;
+                  
+                  const currentMonth = getCurrentDisplayMonth();
+                  const daysInMonth = new Date(currentMonth.year, currentMonth.month + 1, 0).getDate();
+                  const firstDayOfMonth = new Date(currentMonth.year, currentMonth.month, 1).getDay();
+                  const calendarDays = [];
+                  
+                  // Add empty cells for days before the month starts
+                  for (let i = 0; i < firstDayOfMonth; i++) {
+                    calendarDays.push({ type: 'empty', day: null });
+                  }
+                  
+                  // Add all days of the month
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    // Find if there's a photo for this date
+                    const photoForDay = photos.find(photo => {
+                      const photoDate = new Date(photo.created_at);
+                      return photoDate.getDate() === day && 
+                             photoDate.getMonth() === currentMonth.month &&
+                             photoDate.getFullYear() === currentMonth.year;
+                    });
+                    
+                    if (photoForDay) {
+                      calendarDays.push({ 
+                        type: 'photo', 
+                        day: day, 
+                        photo: photoForDay 
+                      });
+                    } else {
+                      calendarDays.push({ 
+                        type: 'empty', 
+                        day: day 
+                      });
+                    }
+                  }
+                  
+                  return calendarDays.map((item, index) => (
+                    <View key={index} style={styles.calendarCell}>
+                      {item.type === 'photo' && item.photo ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.dateCircle,
+                            { backgroundColor: getMoodColor(item.photo.mood_rating) },
+                            selectedPhoto?.id === item.photo.id && styles.selectedCalendarCell
+                          ]}
+                          onPress={() => handlePhotoPress(item.photo)}
+                        >
+                          <Text style={styles.dateText}>{item.day}</Text>
+                        </TouchableOpacity>
+                      ) : item.day ? (
+                        <View style={styles.emptyDateCircle}>
+                          <Text style={styles.emptyDateText}>{item.day}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.calendarCell} />
+                      )}
+                    </View>
+                  ));
+                })()}
+              </View>
             </View>
             
             {selectedPhoto && (
@@ -309,10 +497,10 @@ export default function ProgressScreen() {
               </View>
             )}
 
-            {photos.length > 9 && (
+            {photos.length > 30 && (
               <TouchableOpacity style={[styles.viewMoreButton, { paddingVertical: Math.max(12, width * 0.03) }]}>
                 <Text style={[styles.viewMoreText, { fontSize: Math.max(14, width * 0.035), color: Colors.light.tint }]}>
-                  View all {photos.length} photos
+                  View all {photos.length} days
                 </Text>
                 <IconSymbol name="chevron.right" size={Math.max(14, width * 0.035)} color={Colors.light.tint} />
               </TouchableOpacity>
@@ -350,6 +538,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  headerText: {
+    alignItems: 'center',
+  },
   title: {
     fontSize: 28,
     fontWeight: '700',
@@ -362,6 +559,16 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  shareButton: {
+    padding: 10,
+    backgroundColor: '#F0F8F0',
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -438,37 +645,111 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 15,
   },
-  photoGrid: {
+  calendarContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    width: 320,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  monthHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-
-  selectedPhoto: {
-    borderWidth: 3,
-    borderColor: '#007AFF',
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  photo: {
-    width: '100%',
-    height: '100%',
+  monthText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#424242',
   },
-  photoOverlay: {
+  dropdownMenu: {
     position: 'absolute',
-    bottom: 0,
+    top: 45,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    zIndex: 1,
   },
-  photoMood: {
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dropdownItemText: {
     fontSize: 16,
+    color: '#424242',
+  },
+  weekHeaders: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekHeaderText: {
+    fontSize: 14,
+    color: '#757575',
+    fontWeight: '400',
+    width: 40,
     textAlign: 'center',
   },
-  photoDate: {
-    fontSize: 10,
-    color: '#fff',
-    textAlign: 'center',
-    marginTop: 2,
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
+  },
+  calendarCell: {
+    width: '14.285%', // Exactly 1/7 of the width
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  selectedCalendarCell: {
+    borderWidth: 2,
+    borderColor: '#8FAE8B',
+    borderRadius: 20,
+  },
+  dateCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emptyDateCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E0E0E0', // Gray for empty cells
+  },
+  emptyDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#757575', // Darker gray for empty cells
   },
   selectedPhotoDetails: {
     marginTop: 20,
@@ -504,14 +785,92 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 5,
   },
-  signOutButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 10,
+  transformationContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  signOutText: {
+  transformationTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  transformationComparison: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 15,
+  },
+  transformationPhotoContainer: {
+    alignItems: 'center',
+    backgroundColor: "#F0F8F0",
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+
+  },
+  transformationPhoto: {
+    borderRadius: 10,
+    borderColor: '#E0E0E0',
+  },
+  transformationDayLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  transformationDate: {
+    fontSize: 10,
+    opacity: 0.7,
+  },
+  transformationPrompt: {
+    fontSize: 15,
+    color: '#424242',
+    textAlign: 'left',
+    lineHeight: 20,
+    flex: 1,
+  },
+  progressBanner: {
+    backgroundColor: '#E8F5E9', // Light green background
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a0000	', // Dark green for title
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  progressPercentage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2E7D32', // Dark green for percentage
+  },
+  progressSubtitle: {
     fontSize: 14,
-    fontWeight: '500',
+    color: '#454547', // Dark green for subtitle
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  shareSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 15,
+    paddingHorizontal: 10,
+  },
+  photoAnalysisSection: {
+    marginBottom: 32,
   },
 }); 

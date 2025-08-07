@@ -1,3 +1,4 @@
+
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -376,6 +377,8 @@ export default function HomeScreen() {
            </View>
          </View>
 
+
+
        </ScrollView>
     </SafeAreaView>
   );
@@ -604,5 +607,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-
  }); 
