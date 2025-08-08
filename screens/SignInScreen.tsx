@@ -79,10 +79,10 @@ export default function SignInScreen() {
           <View style={styles.header}>
             <IconSymbol name="sparkles" size={Math.max(60, width * 0.13)} color={Colors.light.tint} />
             <Text style={[styles.title, { color: Colors.light.text, fontSize: Math.max(28, width * 0.07) }]}>
-              Welcome to Glow ✨
+              Cleanse
             </Text>
             <Text style={[styles.subtitle, { color: Colors.light.text, fontSize: Math.max(16, width * 0.045) }]}>
-              {isSignUp ? 'Create your account to start your skincare journey' : 'Sign in to continue your journey'}
+              {isSignUp ? 'Create your account to start your skincare journey' : 'Habitualize your skincare routine.'}
             </Text>
           </View>
 

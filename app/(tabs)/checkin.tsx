@@ -1,10 +1,11 @@
-import { PhotoUpload } from '@/components/PhotoUpload';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useOpenAIChat } from '@/hooks/useOpenAIChat';
 import { useSupabase } from '@/hooks/useSupabase';
-import React, { useEffect, useState } from 'react';
+import { CameraView } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CheckInScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [showQuestions, setShowQuestions] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [sleepQuality, setSleepQuality] = useState<number | null>(null);
   const [stressLevel, setStressLevel] = useState<number | null>(null);
@@ -27,34 +30,25 @@ export default function CheckInScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
-  
-  const colorScheme = useColorScheme();
-  const { user, uploadPhoto, saveSkinPhoto, getDailyStreak } = useSupabase();
-  const { sendMessage, loading: aiLoading } = useOpenAIChat('checkin');
-  const { width } = useWindowDimensions();
 
-  useEffect(() => {
-    if (user) {
-      loadStreak();
-    }
-  }, [user]);
-
-  const loadStreak = async () => {
-    const currentStreak = await getDailyStreak();
-    setStreak(currentStreak);
+  const getMoodEmoji = (rating: number) => {
+    const emojis = ['😔', '😕', '😖', '🙂', '😊'];
+    return emojis[rating - 1] || '😐';
   };
 
-  const handlePhotoTaken = (uri: string) => {
-    setPhotoUri(uri);
+  const getSleepEmoji = (rating: number) => {
+    const emojis = ['😴', '😪', '😴', '😌', '😊'];
+    return emojis[rating - 1] || '😴';
   };
 
-  const handleRetakePhoto = () => {
-    setPhotoUri(null);
-    setMoodRating(null);
-    setSleepQuality(null);
-    setStressLevel(null);
-    setFlareUps(null);
-    setAiMessage(null);
+  const getStressEmoji = (rating: number) => {
+    const emojis = ['😊', '😌', '😐', '😨', '😰'];
+    return emojis[rating - 1] || '😐';
+  };
+
+  const getFlareUpEmoji = (rating: number) => {
+    const emojis = ['😊', '🙂', '😐', '😣', '😖'];
+    return emojis[rating - 1] || '😐';
   };
 
   const handleMoodRating = (rating: number) => {
@@ -71,6 +65,96 @@ export default function CheckInScreen() {
 
   const handleFlareUps = (rating: number) => {
     setFlareUps(rating);
+  };
+
+  const questions = [
+    {
+      title: "How's your skin feeling today?",
+      value: moodRating,
+      setValue: setMoodRating,
+      getEmoji: getMoodEmoji,
+      labels: ['Poor', 'Fair', 'Okay', 'Good', 'Great']
+    },
+    {
+      title: "How was your sleep quality?",
+      value: sleepQuality,
+      setValue: setSleepQuality,
+      getEmoji: getSleepEmoji,
+      labels: ['Poor', 'Fair', 'Okay', 'Good', 'Great']
+    },
+    {
+      title: "What's your stress level?",
+      value: stressLevel,
+      setValue: handleStressLevel,
+      getEmoji: getStressEmoji,
+      labels: ['None', 'Low', 'Normal', 'High', 'Severe']
+    },
+    {
+      title: "Any skin flare-ups?",
+      value: flareUps,
+      setValue: handleFlareUps,
+      getEmoji: getFlareUpEmoji,
+      labels: ['None', 'Slight', 'Mild', 'Moderate', 'Severe']
+    }
+  ];
+  
+  const camera = useRef<any>(null);
+  const router = useRouter();
+  
+  const colorScheme = useColorScheme();
+  const { user, uploadPhoto, saveSkinPhoto, getDailyStreak } = useSupabase();
+  const { sendMessage, loading: aiLoading } = useOpenAIChat('checkin');
+  const { width } = useWindowDimensions();
+
+
+
+  useEffect(() => {
+    if (user) {
+      loadStreak();
+    }
+  }, [user]);
+
+  const loadStreak = async () => {
+    if (user) {
+      const currentStreak = await getDailyStreak();
+      setStreak(currentStreak);
+    }
+  };
+
+  const handlePhotoTaken = (uri: string) => {
+    setPhotoUri(uri);
+    setShowQuestions(false);
+  };
+
+  const handleRetakePhoto = () => {
+    setPhotoUri(null);
+    setShowQuestions(false);
+    setMoodRating(null);
+    setSleepQuality(null);
+    setStressLevel(null);
+    setFlareUps(null);
+    setAiMessage(null);
+  };
+
+  const handleProceedToQuestions = () => {
+    setShowQuestions(true);
+    setCurrentQuestionIndex(0);
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      handleSubmit();
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    } else if (photoUri) {
+      setShowQuestions(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -117,33 +201,18 @@ export default function CheckInScreen() {
       // Update streak
       await loadStreak();
 
-      Alert.alert('Success', 'Daily check-in completed! ✨');
+      Alert.alert('Success', 'Daily check-in completed! ✨', [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/(tabs)/home')
+        }
+      ]);
     } catch (error) {
       console.error('Error submitting check-in:', error);
       Alert.alert('Error', 'Failed to submit check-in. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getMoodEmoji = (rating: number) => {
-    const emojis = ['😔', '😕', '😖', '🙂', '😊'];
-    return emojis[rating - 1] || '😐';
-  };
-
-  const getSleepEmoji = (rating: number) => {
-    const emojis = ['😴', '😪', '😴', '😌', '😊'];
-    return emojis[rating - 1] || '😴';
-  };
-
-  const getStressEmoji = (rating: number) => {
-    const emojis = ['😊', '😌', '😐', '😨', '😰'];
-    return emojis[rating - 1] || '😐';
-  };
-
-  const getFlareUpEmoji = (rating: number) => {
-    const emojis = ['😊', '🙂', '😐', '😣', '😖'];
-    return emojis[rating - 1] || '😐';
   };
 
   const renderRatingSection = (
@@ -187,34 +256,65 @@ export default function CheckInScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: Colors.light.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: Colors.light.text }]}>
-            Daily Check-In
-          </Text>
-          <Text style={[styles.subtitle, { color: Colors.light.text }]}>
-            {streak > 0 ? `${streak} day${streak > 1 ? 's' : ''} streak! 🔥` : 'Start your journey today'}
-          </Text>
-        </View>
-
-        <View style={[styles.photoSection, { marginBottom: 20, paddingVertical: 10, backgroundColor: Colors.light.background }]}>
-          <Text style={[styles.sectionTitle, { color: Colors.light.text }]}>
-            Take Your Daily Photo
-          </Text>
-          {!photoUri && (
-            <View style={[styles.photoContainer, { height: Math.max(500, width * 0.8), minHeight: 450, maxHeight: 700 }]}>
-              <PhotoUpload
-                onPhotoTaken={handlePhotoTaken}
-                onRetake={handleRetakePhoto}
-                photoUri={photoUri || undefined}
-                disabled={isSubmitting}
-              />
+      {!showQuestions && !photoUri ? (
+        <View style={styles.fullScreenCamera}>
+          <CameraView
+            ref={camera}
+            style={StyleSheet.absoluteFill}
+            facing="front"
+            ratio="1:1"
+          >
+            <View style={styles.cameraOverlay}>
+              <View style={styles.topControls}>
+                <TouchableOpacity
+                  style={styles.skipButton}
+                  onPress={() => {
+                    setPhotoUri(null); // Reset photo state when skipping
+                    setShowQuestions(true);
+                  }}
+                >
+                  <Text style={styles.skipButtonText}>Skip</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.centerGuide}>
+                <View style={styles.faceGuideFrame} />
+                <Text style={styles.cameraText}>
+                  Position your face in the frame
+                </Text>
+              </View>
+              
+              <View style={styles.bottomControls}>
+                <TouchableOpacity
+                  style={styles.captureButton}
+                  onPress={async () => {
+                    if (camera.current) {
+                      const photo = await camera.current.takePictureAsync({
+                        quality: 0.8,
+                        skipProcessing: true
+                      });
+                      handlePhotoTaken(photo.uri);
+                    }
+                  }}
+                >
+                  <View style={styles.captureButtonInner} />
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
+          </CameraView>
         </View>
+      ) : photoUri && !showQuestions ? (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: Colors.light.text }]}>
+              Daily Check-In
+            </Text>
+            <Text style={[styles.subtitle, { color: Colors.light.text }]}>
+              {streak > 0 ? `${streak} day${streak > 1 ? 's' : ''} streak! 🔥` : 'Start your journey today'}
+            </Text>
+          </View>
 
-        {photoUri && (
-          <>
+          <View>
             <View style={styles.photoPreviewContainer}>
               <Text style={[styles.photoPreviewTitle, { color: Colors.light.text }]}>
                 Your Photo
@@ -233,43 +333,76 @@ export default function CheckInScreen() {
                   <Text style={styles.retakeButtonText}>Retake</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={[styles.continueButton, { backgroundColor: Colors.light.tint }]}
+                onPress={handleProceedToQuestions}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.continueButtonText}>Continue to Questions</Text>
+              </TouchableOpacity>
             </View>
+          </View>
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
 
-            {renderRatingSection(
-              "How's your skin feeling today?",
-              moodRating,
-              handleMoodRating,
-              getMoodEmoji,
-              ['Poor', 'Fair', 'Okay', 'Good', 'Great']
-            )}
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: Colors.light.text }]}>
+              Daily Check-In
+            </Text>
+            <Text style={[styles.subtitle, { color: Colors.light.text }]}>
+              {streak > 0 ? `${streak} day${streak > 1 ? 's' : ''} streak! 🔥` : 'Start your journey today'}
+            </Text>
+          </View>
 
-            {renderRatingSection(
-              "How was your sleep quality?",
-              sleepQuality,
-              handleSleepQuality,
-              getSleepEmoji,
-              ['Poor', 'Fair', 'Okay', 'Good', 'Great']
-            )}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill,
+                  { width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </Text>
+          </View>
 
-            {renderRatingSection(
-              "What's your stress level?",
-              stressLevel,
-              handleStressLevel,
-              getStressEmoji,
-              ['None', 'Low', 'Normal', 'High', 'Severe']
-            )}
+          {renderRatingSection(
+            questions[currentQuestionIndex].title,
+            questions[currentQuestionIndex].value,
+            questions[currentQuestionIndex].setValue,
+            questions[currentQuestionIndex].getEmoji,
+            questions[currentQuestionIndex].labels
+          )}
 
-            {renderRatingSection(
-              "Any skin flare-ups?",
-              flareUps,
-              handleFlareUps,
-              getFlareUpEmoji,
-              ['None', 'Slight', 'Mild', 'Moderate', 'Severe']
-            )}
-          </>
-        )}
+          <View style={styles.navigationButtons}>
+            <TouchableOpacity
+              style={[styles.navButton, styles.prevButton]}
+              onPress={handlePreviousQuestion}
+            >
+              <IconSymbol name="chevron.left" size={24} color={Colors.light.tint} />
+              <Text style={[styles.navButtonText, { color: Colors.light.tint }]}>
+                {currentQuestionIndex === 0 && photoUri ? 'Back to Photo' : 'Previous'}
+              </Text>
+            </TouchableOpacity>
 
-        {aiMessage && (
+            <TouchableOpacity
+              style={[styles.navButton, styles.nextButton]}
+              onPress={handleNextQuestion}
+              disabled={questions[currentQuestionIndex].value === null}
+            >
+              <Text style={[styles.navButtonText, { color: '#fff' }]}>
+                {currentQuestionIndex === questions.length - 1 ? 'Complete' : 'Next'}
+              </Text>
+              {currentQuestionIndex < questions.length - 1 && (
+                <IconSymbol name="chevron.right" size={24} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {aiMessage && (
           <View style={styles.aiMessageContainer}>
             <View style={[styles.aiMessage, { backgroundColor: Colors.light.cardBackground }]}>
               <IconSymbol name="sparkles" size={20} color={Colors.light.tint} />
@@ -280,38 +413,151 @@ export default function CheckInScreen() {
           </View>
         )}
 
-        {photoUri && moodRating !== null && (
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              { backgroundColor: Colors.light.tint, borderColor: Colors.light.text, borderWidth: 1, paddingVertical: Math.max(16, width * 0.04), borderRadius: Math.max(12, width * 0.03) },
-              isSubmitting && styles.submitButtonDisabled
-            ]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-            activeOpacity={0.8}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <IconSymbol name="checkmark.circle.fill" size={20} color="#fff" />
-                <Text style={[styles.submitButtonText, { fontSize: Math.max(18, width * 0.05), color: '#fff', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: {width: 0, height: 1}, textShadowRadius: 2 }]}>Complete Check-In</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-      </ScrollView>
+        
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  progressContainer: {
+    marginBottom: 24,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: Colors.light.tint,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    paddingHorizontal: 16,
+  },
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+  },
+  prevButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: Colors.light.tint,
+  },
+  nextButton: {
+    backgroundColor: Colors.light.tint,
+  },
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 8,
+  },
   container: {
     flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    
+  },
+  camera: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  cameraText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  skipButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 25,
+    marginBottom: 40,
+  },
+  skipButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  fullScreenCamera: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  topControls: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    zIndex: 1001,
+  },
+  centerGuide: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1001,
+  },
+  faceGuideFrame: {
+    width: 250,
+    height: 250,
+    borderWidth: 3,
+    borderColor: '#fff',
+    borderRadius: 20,
+    opacity: 0.8,
+    marginBottom: 20,
+  },
+  bottomControls: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1001,
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  captureButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
   },
   scrollContent: {
     padding: 24,
@@ -405,20 +651,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    paddingHorizontal: 30,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    marginLeft: 8,
-    fontWeight: '600',
-  },
+
   photoPreviewContainer: {
     marginBottom: 25,
     paddingVertical: 10,
@@ -459,4 +692,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 5,
   },
+  continueButton: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
 }); 
