@@ -3,7 +3,7 @@ import { supabase } from '@/constants/supabase';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useSupabase } from '@/hooks/useSupabase';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const PRODUCT_TYPES = ['cleanser', 'toner', 'serum', 'moisturizer', 'spf'];
 
@@ -67,27 +67,27 @@ export default function InputProductsScreen() {
         <TextInput
           style={[styles.input, { color: Colors.light.text, borderColor: Colors.light.tint }]}
           placeholder="Product Name"
-          placeholderTextColor={Colors.light.text + '80'}
+          placeholderTextColor={"#808080"}
           value={name}
           onChangeText={setName}
         />
-        <View style={styles.typeRow}>
-          {PRODUCT_TYPES.map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[
-                styles.typeButton, 
-                type === t && { 
-                  backgroundColor: Colors.light.tint, 
-                  borderColor: Colors.light.tint 
-                }
-              ]}
-              onPress={() => setType(t)}
-            >
-              <Text style={[styles.typeButtonText, type === t ? styles.typeButtonTextSelected : null]}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
+           {PRODUCT_TYPES.map((t) => (
+             <TouchableOpacity
+               key={t}
+               style={[
+                 styles.typeButton, 
+                 type === t && { 
+                   backgroundColor: Colors.light.tint, 
+                   borderColor: Colors.light.tint 
+                 }
+               ]}
+               onPress={() => setType(t)}
+             >
+               <Text style={[styles.typeButtonText, type === t ? styles.typeButtonTextSelected : null]}>{t}</Text>
+             </TouchableOpacity>
+           ))}
+         </ScrollView>
         <TouchableOpacity 
           style={[styles.addButton, { backgroundColor: Colors.light.tint }]} 
           onPress={addProduct} 
@@ -101,9 +101,9 @@ export default function InputProductsScreen() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={styles.productRow}>
-            <Text style={[styles.productName, { color: Colors.light.text }]}>{item.name} ({item.type})</Text>
+            <Text style={[styles.productName, { color: "#808080" }]}>{`${item.name} (${item.type})`}</Text>
             <TouchableOpacity onPress={() => deleteProduct(item.id)}>
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.deleteText}>X</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -133,22 +133,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  typeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  typeRow: { 
+    flexDirection: 'row', 
+    marginBottom: 16,
+    paddingHorizontal: 8, // Add some horizontal padding to the ScrollView
+  },
   typeButton: { 
-    padding: 12, 
+    padding: 10, 
     borderRadius: 12, 
     borderWidth: 1, 
     borderColor: '#E0E0E0', 
-    marginRight: 8,
+    marginRight: 12,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
+    minWidth: 80, // Ensure minimum width for better touch targets
   },
   typeButtonSelected: { borderColor: '#8FAE8B' },
-  typeButtonText: { color: '#424242', fontWeight: '500' },
+  typeButtonText: { color: '#808080', fontWeight: '500' },
   typeButtonTextSelected: { color: '#fff', fontWeight: '600' },
   addButton: { 
     padding: 20, 
@@ -176,6 +181,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  productName: { fontSize: 16, fontWeight: '500', color: '#424242' },
-  deleteText: { color: '#FF6B6B', fontWeight: '600' },
+  productName: { fontSize: 16, fontWeight: '500', color: '#808080' },
+  deleteText: { color: '#FF6B6B', fontWeight: '900' },
 }); 
