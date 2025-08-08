@@ -20,6 +20,8 @@ interface PhotoAnalysisDemoProps {
 export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
   const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
   const [previousPhoto, setPreviousPhoto] = useState<string | null>(null);
+  const [currentPhotoTimestamp, setCurrentPhotoTimestamp] = useState<string | undefined>(undefined);
+  const [previousPhotoTimestamp, setPreviousPhotoTimestamp] = useState<string | undefined>(undefined);
 
   const {
     analyzing,
@@ -45,11 +47,14 @@ export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
 
       if (!result.canceled && result.assets[0]) {
         const photoUri = result.assets[0].uri;
+        const timestamp = new Date().toISOString();
         
         if (isPrevious) {
           setPreviousPhoto(photoUri);
+          setPreviousPhotoTimestamp(timestamp);
         } else {
           setCurrentPhoto(photoUri);
+          setCurrentPhotoTimestamp(timestamp);
         }
         
         // Clear previous results when new photo is selected
@@ -80,7 +85,14 @@ export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
       return;
     }
 
-    await comparePhotos(currentPhoto, previousPhoto);
+    await comparePhotos(
+      currentPhoto, 
+      previousPhoto, 
+      undefined, 
+      undefined, 
+      currentPhotoTimestamp, 
+      previousPhotoTimestamp
+    );
   };
 
   const renderScoreBar = (score: number | string, label: string) => (
@@ -203,12 +215,31 @@ export function PhotoAnalysisDemo({ userId }: PhotoAnalysisDemoProps) {
         <Text style={styles.feedbackText}>{result.feedback}</Text>
       </View>
 
+      
+
+      {result.areasOfFocus.length > 0 && (
+        <View style={styles.concernsContainer}>
+          <Text style={styles.concernsTitle}>Focus Areas</Text>
+          {result.areasOfFocus.map((concern: string, index: number) => (
+            <Text key={index} style={styles.concernText}>• {concern}</Text>
+          ))}
+        </View>
+      )}
+
+      {result.suggestion && (
+        <View style={styles.directionContainer}>
+          <Text style={styles.directionTitle}>Suggestion</Text>
+          <Text style={styles.directionText}>{result.suggestion}</Text>
+        </View>
+      )}
       {result.timeBetweenPhotos > 0 && (
         <Text style={styles.timeText}>
           Time between photos: {result.timeBetweenPhotos} days
         </Text>
       )}
     </View>
+
+      
   );
 
   return (

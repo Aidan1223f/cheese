@@ -25,7 +25,14 @@ export interface UsePhotoAnalysisReturn {
   
   // Actions
   analyzePhoto: (request: AnalysisRequest) => Promise<void>;
-  comparePhotos: (currentPhotoUrl: string, previousPhotoUrl: string, userHabits?: UserHabits) => Promise<void>;
+  comparePhotos: (
+    currentPhotoUrl: string, 
+    previousPhotoUrl: string, 
+    userHabits?: UserHabits,
+    userData?: any,
+    currentPhotoTimestamp?: string,
+    previousPhotoTimestamp?: string
+  ) => Promise<void>;
   
   // Utilities
   clearResults: () => void;
@@ -77,7 +84,10 @@ export function usePhotoAnalysis(userId?: string): UsePhotoAnalysisReturn {
   const handleComparePhotos = useCallback(async (
     currentPhotoUrl: string,
     previousPhotoUrl: string,
-    providedUserHabits?: UserHabits
+    providedUserHabits?: UserHabits,
+    userData?: any,
+    currentPhotoTimestamp?: string,
+    previousPhotoTimestamp?: string
   ) => {
     setComparing(true);
     setComparisonError(null);
@@ -86,7 +96,14 @@ export function usePhotoAnalysis(userId?: string): UsePhotoAnalysisReturn {
       // Use real user habits from Supabase if not provided
       const finalUserHabits = providedUserHabits || userHabits;
       
-      const response = await comparePhotos(currentPhotoUrl, previousPhotoUrl, finalUserHabits);
+      const response = await comparePhotos(
+        currentPhotoUrl, 
+        previousPhotoUrl, 
+        finalUserHabits,
+        userData,
+        currentPhotoTimestamp,
+        previousPhotoTimestamp
+      );
       
       if (response.success && response.data) {
         setComparisonResult(response.data as PhotoComparisonResult);

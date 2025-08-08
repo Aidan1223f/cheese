@@ -197,7 +197,9 @@ class PhotoAnalysisService {
     currentPhotoUrl: string,
     previousPhotoUrl: string,
     userHabits?: UserHabits,
-    userData?: any
+    userData?: any,
+    currentPhotoTimestamp?: string,
+    previousPhotoTimestamp?: string
   ): Promise<AnalysisResponse> {
     try {
       if (!currentPhotoUrl || !previousPhotoUrl) {
@@ -222,6 +224,17 @@ class PhotoAnalysisService {
 
       // Parse the comparison result
       const parsedComparison = this.parseComparisonResult(comparisonResult);
+
+      // Calculate time between photos client-side if timestamps are provided
+      if (currentPhotoTimestamp && previousPhotoTimestamp) {
+        parsedComparison.timeBetweenPhotos = this.calculateDaysBetween(
+          previousPhotoTimestamp, 
+          currentPhotoTimestamp
+        );
+      } else {
+        // Set a default time difference if timestamps are not provided
+        parsedComparison.timeBetweenPhotos = 7; // Default to 7 days
+      }
 
       return {
         success: true,
@@ -472,10 +485,13 @@ These scores reflect **percentage change in visible appearance** — not absolut
 - 0: No change
 - Negative: Tone less even or more marks present
 
-**Under-Eyes (% or description):**
-- Use % if brightness visibly changed, or a short description if subtle
-- Example: +20 = "slightly brighter", -10 = "slightly more shadowed"
-- Or use: "no visible change", "more rested", "slightly darker"
+**Under-Eyes (% ):**
+- If brightness change is visible, calculate % change compared to baseline.
+- +90 to +100 → "Under-eyes are much brighter and healthier-looking"
+- +50 to +89 → "Noticeably brighter under-eyes"
+- +10 to +49 → "Slightly brighter under-eye area"
+- 0 → "No visible change"
+- Negative → "Under-eye area appears slightly darker or more shadowed"
 
 **Visible Progress Score (%):**
 - Holistic visual change — not an average
@@ -491,12 +507,11 @@ Use this exact JSON format — return ONLY valid JSON:
   "Redness & Irritation": 77,
   "texture": 67,
   "Tone & Marks": 88,
-  "underEyes": ["generally bright with minimal shadow"],
+  "underEyes": 76,
   "Visible Progress Score": 79,
   "feedback": "Looking great! Texture is visibly improving. Keep up your routine and stay consistent.",
   "areasOfFocus": ["slight roughness on forehead", "some uneven tone near cheeks"],
-  "suggestion": "Drink more water this week and get consistent sleep.",
-  "timeBetweenPhotos": 14
+  "suggestion": "Drink more water this week and get consistent sleep."
 }
 
 `;
@@ -1008,7 +1023,6 @@ Use this exact JSON format — return ONLY valid JSON:
       const visibleProgressScore = parsed['Visible Progress Score'] || parsed.visibleProgressScore || 0;
       const feedback = parsed.feedback || parsed.Feedback || 'Progress analysis completed';
       const suggestion = parsed.suggestion || parsed.Suggestion || '';
-      const timeBetweenPhotos = parsed.timeBetweenPhotos || parsed.daysBetween || 0;
 
       // Convert the individual scores to improvement percentages
       // Since the new format uses the same scoring as single photo analysis,
@@ -1022,7 +1036,7 @@ Use this exact JSON format — return ONLY valid JSON:
         feedback: feedback,
         areasOfFocus: parsed.areasOfFocus || parsed.areasOfConcern || [],
         suggestion: suggestion,
-        timeBetweenPhotos: timeBetweenPhotos
+        timeBetweenPhotos: 0 // Will be calculated client-side
       };
 
     } catch (error) {
@@ -1132,5 +1146,14 @@ export const comparePhotos = (
   currentPhotoUrl: string,
   previousPhotoUrl: string,
   userHabits?: UserHabits,
-  userData?: any
-) => photoAnalysisService.comparePhotos(currentPhotoUrl, previousPhotoUrl, userHabits, userData); 
+  userData?: any,
+  currentPhotoTimestamp?: string,
+  previousPhotoTimestamp?: string
+) => photoAnalysisService.comparePhotos(
+  currentPhotoUrl, 
+  previousPhotoUrl, 
+  userHabits, 
+  userData,
+  currentPhotoTimestamp,
+  previousPhotoTimestamp
+); 
